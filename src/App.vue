@@ -13,7 +13,8 @@ import GameGrid from '@/components/GameGrid.vue'
           <h1 class="title">Treasure Hunter</h1>
         </div>
         <p class="subtitle">
-          Mark dug tiles and unfound treasures to see where to dig next.
+          Mark every dug tile — including partial treasure finds — to see the best odds for your next dig.
+          <span class="tip">Tip: locate all treasures before digging any up. Even partial finds should be marked here so the calculator can narrow down where the remaining treasures are — maximising the chance that bombs uncover extra tiles for you.</span>
         </p>
       </div>
     </header>
@@ -81,7 +82,15 @@ import GameGrid from '@/components/GameGrid.vue'
 .subtitle {
   font-size: 13px;
   color: var(--text-muted);
-  max-width: 340px;
+  max-width: 400px;
+  line-height: 1.6;
+}
+
+.tip {
+  display: block;
+  margin-top: 4px;
+  color: var(--accent);
+  font-size: 12px;
 }
 
 .app-body {

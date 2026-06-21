@@ -1,0 +1,76 @@
+:root {
+  --ground: #1a1f2e;
+  --surface: #242b3d;
+  --surface-2: #2e3650;
+  --surface-3: #3a4466;
+  --text: #e8dcc8;
+  --text-muted: #8a8070;
+  --accent: #f5a623;
+  --accent-dim: rgba(245, 166, 35, 0.15);
+  --accent-2: #4ecdc4;
+  --accent-2-dim: rgba(78, 205, 196, 0.15);
+  --danger: #e85d4a;
+  --danger-dim: rgba(232, 93, 74, 0.15);
+
+  --font-mono: 'Share Tech Mono', 'Courier New', monospace;
+  --font-body: 'Inter', system-ui, sans-serif;
+
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--ground);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  height: 100%;
+}
+
+/* Scanline overlay — the aesthetic risk layer */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.04) 2px,
+    rgba(0, 0, 0, 0.04) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+button {
+  font-family: var(--font-body);
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+select {
+  font-family: var(--font-body);
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent-2);
+  cursor: pointer;
+}

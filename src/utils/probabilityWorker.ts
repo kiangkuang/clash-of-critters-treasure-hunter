@@ -44,6 +44,24 @@ function buildPlacements(
   return result
 }
 
+function buildProbabilities(
+  coverage: Float64Array,
+  totalConfigs: number,
+  gridSize: number,
+  total: number,
+  initiallyBlocked: Uint8Array,
+): Record<string, number> {
+  const probabilities: Record<string, number> = {}
+  if (totalConfigs > 0) {
+    for (let i = 0; i < total; i++) {
+      if (coverage[i] > 0 && !initiallyBlocked[i]) {
+        probabilities[`${Math.floor(i / gridSize)},${i % gridSize}`] = coverage[i] / totalConfigs
+      }
+    }
+  }
+  return probabilities
+}
+
 function compute(input: WorkerInput): WorkerOutput {
   const { gridSize, blockedCells, treasures } = input
   const total = gridSize * gridSize
@@ -57,11 +75,10 @@ function compute(input: WorkerInput): WorkerOutput {
 
   // Sort most-constrained first
   const order = placementsByTreasure
-    .map((p, i) => i)
+    .map((_, i) => i)
     .sort((a, b) => placementsByTreasure[a].length - placementsByTreasure[b].length)
   const sorted = order.map((i) => placementsByTreasure[i])
 
-  // Check for impossible stage (any treasure has 0 placements)
   if (sorted.some((p) => p.length === 0)) {
     return { probabilities: {}, exact: true, configs: 0 }
   }
@@ -73,18 +90,24 @@ function compute(input: WorkerInput): WorkerOutput {
   const BUDGET_MS = 80
   const start = Date.now()
   let timedOut = false
+  let nodeCount = 0
+
+  // placedCells[depth] holds the indices placed by sorted[depth]
+  const placedCells: number[][] = new Array(sorted.length)
 
   function backtrack(idx: number) {
     if (timedOut) return
-    if (Date.now() - start > BUDGET_MS) {
+    // Check timer every 1024 nodes to amortise Date.now() cost
+    if ((++nodeCount & 1023) === 0 && Date.now() - start > BUDGET_MS) {
       timedOut = true
       return
     }
 
     if (idx === sorted.length) {
       totalConfigs++
-      for (let i = 0; i < total; i++) {
-        if (occupied[i]) coverage[i]++
+      // Accumulate only the actually-placed cells
+      for (let d = 0; d < sorted.length; d++) {
+        for (const ci of placedCells[d]) coverage[ci]++
       }
       return
     }
@@ -97,6 +120,7 @@ function compute(input: WorkerInput): WorkerOutput {
       if (conflict) continue
 
       for (const ci of placement) occupied[ci] = 1
+      placedCells[idx] = placement
       backtrack(idx + 1)
       for (const ci of placement) occupied[ci] = 0
     }
@@ -105,33 +129,18 @@ function compute(input: WorkerInput): WorkerOutput {
   backtrack(0)
 
   if (!timedOut) {
-    // Exact result
-    const probabilities: Record<string, number> = {}
-    if (totalConfigs > 0) {
-      for (let i = 0; i < total; i++) {
-        if (coverage[i] > 0 && !initiallyBlocked[i]) {
-          probabilities[`${Math.floor(i / gridSize)},${i % gridSize}`] =
-            coverage[i] / totalConfigs
-        }
-      }
+    return {
+      probabilities: buildProbabilities(coverage, totalConfigs, gridSize, total, initiallyBlocked),
+      exact: true,
+      configs: totalConfigs,
     }
-    return { probabilities, exact: true, configs: totalConfigs }
   }
 
-  // Timed out — run uniform Monte Carlo sampling using sequential placement
-  // Reset state
+  // Timed out — Monte Carlo rejection sampling
   coverage.fill(0)
   totalConfigs = 0
-  occupied.fill(0)
 
   const SAMPLES = 200_000
-
-  // For uniform sampling: enumerate placements for each treasure that don't
-  // conflict with already-placed treasures is intractable without the exact count.
-  // Instead use rejection sampling: pick uniformly from each treasure's full
-  // placement list and reject the sample if any conflict exists.
-  // Acceptance rate ≈ fraction of non-conflicting configs which is typically high
-  // enough when placements are spread across the grid.
   const attemptLimit = SAMPLES * 20
 
   for (let attempt = 0; attempt < attemptLimit && totalConfigs < SAMPLES; attempt++) {
@@ -139,41 +148,34 @@ function compute(input: WorkerInput): WorkerOutput {
     const placed: number[][] = []
 
     for (const plist of sorted) {
-      const idx = Math.floor(Math.random() * plist.length)
-      const cells = plist[idx]
+      const pick = plist[Math.floor(Math.random() * plist.length)]
       let conflict = false
-      for (const ci of cells) {
+      for (const ci of pick) {
         if (occupied[ci]) { conflict = true; break }
       }
       if (conflict) {
         valid = false
         break
       }
-      for (const ci of cells) occupied[ci] = 1
-      placed.push(cells)
+      for (const ci of pick) occupied[ci] = 1
+      placed.push(pick)
     }
 
     if (valid) {
       totalConfigs++
-      for (let i = 0; i < total; i++) if (occupied[i]) coverage[i]++
+      for (const cells of placed) for (const ci of cells) coverage[ci]++
     }
 
     for (const cells of placed) for (const ci of cells) occupied[ci] = 0
   }
 
-  const probabilities: Record<string, number> = {}
-  if (totalConfigs > 0) {
-    for (let i = 0; i < total; i++) {
-      if (coverage[i] > 0 && !initiallyBlocked[i]) {
-        probabilities[`${Math.floor(i / gridSize)},${i % gridSize}`] =
-          coverage[i] / totalConfigs
-      }
-    }
+  return {
+    probabilities: buildProbabilities(coverage, totalConfigs, gridSize, total, initiallyBlocked),
+    exact: false,
+    configs: totalConfigs,
   }
-  return { probabilities, exact: false, configs: totalConfigs }
 }
 
-// Worker message handler
 self.onmessage = (e: MessageEvent<WorkerInput>) => {
   const result = compute(e.data)
   self.postMessage(result)

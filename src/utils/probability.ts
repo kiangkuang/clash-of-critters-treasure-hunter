@@ -41,9 +41,7 @@ export function computeProbabilities(
 
     const handler = (e: MessageEvent<WorkerOutput>) => {
       w.removeEventListener('message', handler)
-      const map: ProbabilityMap = new Map(
-        Object.entries(e.data.probabilities).map(([k, v]) => [k, v]),
-      )
+      const map: ProbabilityMap = new Map(Object.entries(e.data.probabilities))
       resolve({ map, exact: e.data.exact })
     }
     w.addEventListener('message', handler)

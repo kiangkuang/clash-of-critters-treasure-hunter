@@ -4,30 +4,16 @@ import type { GridCell, TreasureInstance } from '@/types'
 import { STAGES, TREASURE_DEFINITIONS } from '@/data/gameData'
 import { computeProbabilities } from '@/utils/probability'
 
-// Each stage instance gets a color from this palette, assigned in order
 const INSTANCE_PALETTE = [
-  '#f5a623', // amber
-  '#e85d4a', // coral
-  '#4ecdc4', // teal
-  '#a78bfa', // violet
-  '#34d399', // emerald
-  '#fb923c', // orange
-  '#f472b6', // pink
-  '#60a5fa', // sky blue
-  '#facc15', // yellow
-  '#c084fc', // purple
-  '#2dd4bf', // cyan
+  '#f5a623', '#e85d4a', '#4ecdc4', '#a78bfa', '#34d399',
+  '#fb923c', '#f472b6', '#60a5fa', '#facc15', '#c084fc', '#2dd4bf',
 ]
 
 const selectedStageId = ref<number>(1)
 const cells = ref<GridCell[]>([])
 const treasureInstances = ref<TreasureInstance[]>([])
-
-// Which treasure instance is the user currently assigning found cells to
-// null = no assignment mode (click cycles state freely)
 const assigningInstanceId = ref<string | null>(null)
 
-// Async probability state
 const probabilityMap = ref<Map<string, number>>(new Map())
 const probabilityExact = ref<boolean>(true)
 const probabilityLoading = ref<boolean>(false)
@@ -45,16 +31,14 @@ function buildCells(size: number): GridCell[] {
 function buildInstances(stageId: number): TreasureInstance[] {
   const stage = STAGES.find((s) => s.id === stageId)!
   const result: TreasureInstance[] = []
-  let colorIdx = 0
   for (const { definitionId, count } of stage.treasures) {
     for (let i = 1; i <= count; i++) {
       result.push({
         id: `${definitionId}-${i}`,
         definitionId,
         found: false,
-        color: INSTANCE_PALETTE[colorIdx % INSTANCE_PALETTE.length],
+        color: INSTANCE_PALETTE[result.length % INSTANCE_PALETTE.length],
       })
-      colorIdx++
     }
   }
   return result
@@ -65,34 +49,40 @@ treasureInstances.value = buildInstances(STAGES[0].id)
 
 async function recalculate() {
   probabilityLoading.value = true
-
   const stage = STAGES.find((s) => s.id === selectedStageId.value)!
   const remaining = treasureInstances.value
     .filter((t) => !t.found)
     .map((t) => TREASURE_DEFINITIONS.find((d) => d.id === t.definitionId)!)
-
   const { map, exact } = await computeProbabilities(stage.size, cells.value, remaining)
   probabilityMap.value = map
   probabilityExact.value = exact
   probabilityLoading.value = false
 }
 
-// Debounce recalculation slightly so rapid clicks don't spawn many workers
 let recalcTimer: ReturnType<typeof setTimeout> | null = null
 function scheduleRecalc() {
   if (recalcTimer) clearTimeout(recalcTimer)
   recalcTimer = setTimeout(recalculate, 80)
 }
 
-// Trigger recalc whenever relevant state changes
 watch([cells, treasureInstances], scheduleRecalc, { deep: false })
-
-// Initial calculation
 recalculate()
 
 export function useGameState() {
   const currentStage = computed(() => STAGES.find((s) => s.id === selectedStageId.value)!)
   const gridSize = computed(() => currentStage.value.size)
+
+  function cellAt(row: number, col: number): GridCell {
+    return cells.value[row * gridSize.value + col]
+  }
+
+  function unmarkCell(row: number, col: number): string | null {
+    const instanceId = cellAt(row, col).assignedTo
+    cells.value = cells.value.map((c) =>
+      c.row === row && c.col === col ? { ...c, state: CellState.UNKNOWN, assignedTo: null } : c,
+    )
+    return instanceId
+  }
 
   function selectStage(id: number) {
     selectedStageId.value = id
@@ -105,19 +95,11 @@ export function useGameState() {
   function cycleCell(row: number, col: number) {
     if (assigningInstanceId.value !== null) {
       const instanceId = assigningInstanceId.value
-      const instance = treasureInstances.value.find((t) => t.id === instanceId)!
-      const def = TREASURE_DEFINITIONS.find((d) => d.id === instance.definitionId)!
-      const maxCells = def.rows * def.cols
-
-      const current = cells.value.find((c) => c.row === row && c.col === col)!
+      const current = cellAt(row, col)
 
       // Clicking a cell already assigned to this instance → unmark it
       if (current.state === CellState.TREASURE && current.assignedTo === instanceId) {
-        cells.value = cells.value.map((cell) =>
-          cell.row === row && cell.col === col
-            ? { ...cell, state: CellState.UNKNOWN, assignedTo: null }
-            : cell,
-        )
+        unmarkCell(row, col)
         return
       }
 
@@ -125,10 +107,8 @@ export function useGameState() {
       if (current.state === CellState.TREASURE) return
 
       // At capacity — ignore
-      const alreadyMarked = cells.value.filter(
-        (c) => c.state === CellState.TREASURE && c.assignedTo === instanceId,
-      ).length
-      if (alreadyMarked >= maxCells) return
+      const maxCells = maxCellsForInstance(instanceId)
+      if (markedCountForInstance(instanceId) >= maxCells) return
 
       const nextCells = cells.value.map((cell) =>
         cell.row === row && cell.col === col
@@ -150,14 +130,11 @@ export function useGameState() {
       return
     }
 
-    // Normal mode: UNKNOWN ↔ EMPTY; TREASURE cells are unassigned and reset to UNKNOWN
-    const current = cells.value.find((c) => c.row === row && c.col === col)!
+    // Normal mode: UNKNOWN ↔ EMPTY; TREASURE cells are cleared
+    const current = cellAt(row, col)
     if (current.state === CellState.TREASURE) {
-      const instanceId = current.assignedTo
-      cells.value = cells.value.map((c) =>
-        c.row === row && c.col === col ? { ...c, state: CellState.UNKNOWN, assignedTo: null } : c,
-      )
-      // If the instance was marked found, revert it since it's no longer fully marked
+      const instanceId = unmarkCell(row, col)
+      // Revert found state since the instance is no longer fully marked
       if (instanceId) {
         const instance = treasureInstances.value.find((t) => t.id === instanceId)
         if (instance?.found) {
@@ -168,35 +145,27 @@ export function useGameState() {
       }
       return
     }
-    const nextState: Record<CellState, CellState> = {
-      [CellState.UNKNOWN]: CellState.EMPTY,
-      [CellState.EMPTY]: CellState.UNKNOWN,
-      [CellState.TREASURE]: CellState.UNKNOWN,
-    }
     cells.value = cells.value.map((cell) =>
       cell.row === row && cell.col === col
-        ? { ...cell, state: nextState[cell.state] }
+        ? { ...cell, state: cell.state === CellState.UNKNOWN ? CellState.EMPTY : CellState.UNKNOWN }
         : cell,
     )
   }
 
   function toggleTreasureFound(instanceId: string) {
     const instance = treasureInstances.value.find((t) => t.id === instanceId)!
-    const wasFound = instance.found
-    treasureInstances.value = treasureInstances.value.map((t) =>
-      t.id === instanceId ? { ...t, found: !t.found } : t,
-    )
-    if (!wasFound) {
-      // Marking as found: exit assigning mode
-      if (assigningInstanceId.value === instanceId) {
-        assigningInstanceId.value = null
-      }
+    if (!instance.found) {
+      // Marking found: exit assigning mode
+      if (assigningInstanceId.value === instanceId) assigningInstanceId.value = null
     } else {
-      // Un-marking as found: clear all cells assigned to this instance
+      // Un-marking: clear all cells assigned to this instance
       cells.value = cells.value.map((c) =>
         c.assignedTo === instanceId ? { ...c, state: CellState.UNKNOWN, assignedTo: null } : c,
       )
     }
+    treasureInstances.value = treasureInstances.value.map((t) =>
+      t.id === instanceId ? { ...t, found: !t.found } : t,
+    )
   }
 
   function setAssigningInstance(instanceId: string | null) {
@@ -204,14 +173,12 @@ export function useGameState() {
       assigningInstanceId.value === instanceId ? null : instanceId
   }
 
-  // How many cells are currently marked for a given treasure instance
   function markedCountForInstance(instanceId: string): number {
     return cells.value.filter(
       (c) => c.state === CellState.TREASURE && c.assignedTo === instanceId,
     ).length
   }
 
-  // Max cells for a given treasure instance based on its definition
   function maxCellsForInstance(instanceId: string): number {
     const instance = treasureInstances.value.find((t) => t.id === instanceId)
     if (!instance) return 0

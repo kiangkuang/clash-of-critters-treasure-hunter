@@ -56,8 +56,8 @@ const tooltip = computed(() => {
       'is-other-cell': isOtherCell,
     }"
     :style="{
-      ...(cell.state === CellState.UNKNOWN ? { '--prob': probability } : {}),
-      ...(treasureColor ? { '--treasure-color': treasureColor } : {}),
+      '--prob': cell.state === CellState.UNKNOWN ? probability : undefined,
+      '--treasure-color': treasureColor ?? undefined,
     }"
     :title="tooltip"
     :aria-label="`Row ${cell.row + 1}, Col ${cell.col + 1}: ${tooltip}`"

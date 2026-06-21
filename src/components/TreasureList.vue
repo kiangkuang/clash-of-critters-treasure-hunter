@@ -14,19 +14,26 @@ const {
   resetGrid,
 } = useGameState()
 
-// Flat list with definition resolved, copy number computed per-definitionId
 const flatTreasures = computed(() => {
   const copyCounter: Record<string, number> = {}
   return treasureInstances.value.map((instance) => {
     copyCounter[instance.definitionId] = (copyCounter[instance.definitionId] ?? 0) + 1
     const def = TREASURE_DEFINITIONS.find((d) => d.id === instance.definitionId)!
-    return { instance, def, copyNum: copyCounter[instance.definitionId] }
+    const markedCount = markedCountForInstance(instance.id)
+    const maxCells = maxCellsForInstance(instance.id)
+    return { instance, def, copyNum: copyCounter[instance.definitionId], markedCount, maxCells }
   })
 })
 
 const foundCount = computed(() => treasureInstances.value.filter((t) => t.found).length)
 const totalCount = computed(() => treasureInstances.value.length)
 const allFound = computed(() => foundCount.value === totalCount.value)
+
+const assigningItem = computed(() =>
+  assigningInstanceId.value
+    ? flatTreasures.value.find((f) => f.instance.id === assigningInstanceId.value) ?? null
+    : null,
+)
 </script>
 
 <template>
@@ -42,13 +49,13 @@ const allFound = computed(() => foundCount.value === totalCount.value)
 
     <div v-else class="items">
       <div
-        v-for="{ instance, def, copyNum } in flatTreasures"
+        v-for="{ instance, def, copyNum, markedCount, maxCells } in flatTreasures"
         :key="instance.id"
         class="item"
         :class="{
           found: instance.found,
           assigning: assigningInstanceId === instance.id,
-          full: !instance.found && markedCountForInstance(instance.id) >= maxCellsForInstance(instance.id) && maxCellsForInstance(instance.id) > 0,
+          full: !instance.found && markedCount >= maxCells && maxCells > 0,
         }"
         :style="{ '--t-color': instance.color }"
         @click="instance.found ? toggleTreasureFound(instance.id) : setAssigningInstance(instance.id)"
@@ -66,9 +73,7 @@ const allFound = computed(() => foundCount.value === totalCount.value)
           "
           @click.stop
         >
-          <template v-if="markedCountForInstance(instance.id) > 0">
-            ◆ {{ markedCountForInstance(instance.id) }}/{{ maxCellsForInstance(instance.id) }}
-          </template>
+          <template v-if="markedCount > 0">◆ {{ markedCount }}/{{ maxCells }}</template>
           <template v-else>◇ mark</template>
         </button>
 
@@ -76,22 +81,20 @@ const allFound = computed(() => foundCount.value === totalCount.value)
           <span class="item-name">{{ def.name }}</span>
           <span class="item-sub">Copy {{ copyNum }} · {{ def.rows }}×{{ def.cols }}</span>
         </div>
-
       </div>
     </div>
 
-    <div class="assigning-hint" :class="{ visible: assigningInstanceId }">
-      <template v-if="assigningInstanceId">
-        <template v-if="markedCountForInstance(assigningInstanceId) >= maxCellsForInstance(assigningInstanceId)">
-          All {{ maxCellsForInstance(assigningInstanceId) }} cells marked.
+    <div class="assigning-hint" :class="{ visible: assigningItem }">
+      <template v-if="assigningItem">
+        <template v-if="assigningItem.markedCount >= assigningItem.maxCells">
+          All {{ assigningItem.maxCells }} cells marked.
         </template>
         <template v-else>
-          Mark {{ maxCellsForInstance(assigningInstanceId) - markedCountForInstance(assigningInstanceId) }}
-          more cell{{ maxCellsForInstance(assigningInstanceId) - markedCountForInstance(assigningInstanceId) === 1 ? '' : 's' }}
+          Mark {{ assigningItem.maxCells - assigningItem.markedCount }}
+          more cell{{ assigningItem.maxCells - assigningItem.markedCount === 1 ? '' : 's' }}
           on the grid. Tap ◆ to unmark.
         </template>
       </template>
-      <template v-else>&nbsp;</template>
     </div>
 
     <button class="reset-btn" @click="resetGrid">Reset grid</button>
@@ -236,6 +239,7 @@ const allFound = computed(() => foundCount.value === totalCount.value)
 .assigning-hint {
   font-size: 11px;
   padding: 7px 10px;
+  min-height: 2.5em;
   border-radius: var(--radius-sm);
   border-left: 2px solid transparent;
   line-height: 1.5;

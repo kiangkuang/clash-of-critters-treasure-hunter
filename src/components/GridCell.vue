@@ -6,7 +6,9 @@ import type { GridCell } from '@/types'
 const props = defineProps<{
   cell: GridCell
   probability: number
+  probabilityNormalized: number
   treasureColor: string | null
+  treasureLabel: string | null
   assigningInstanceId: string | null
 }>()
 
@@ -56,7 +58,7 @@ const tooltip = computed(() => {
       'is-other-cell': isOtherCell,
     }"
     :style="{
-      '--prob': cell.state === CellState.UNKNOWN ? probability : undefined,
+      '--prob': cell.state === CellState.UNKNOWN ? probabilityNormalized : undefined,
       '--treasure-color': treasureColor ?? undefined,
     }"
     :title="tooltip"
@@ -64,7 +66,7 @@ const tooltip = computed(() => {
     @click="emit('click')"
   >
     <span v-if="cell.state === CellState.EMPTY" class="glyph empty-glyph">✕</span>
-    <span v-else-if="cell.state === CellState.TREASURE" class="glyph treasure-glyph">◆</span>
+    <span v-else-if="cell.state === CellState.TREASURE" class="glyph treasure-glyph">{{ treasureLabel ?? '◆' }}</span>
     <span v-else-if="probPercent > 0" class="prob-label">{{ probPercent }}%</span>
   </button>
 </template>
@@ -109,20 +111,10 @@ const tooltip = computed(() => {
 }
 
 .cell[data-state="unknown"] {
-  background: color-mix(
-    in srgb,
-    var(--danger) calc(var(--prob, 0) * 160%),
-    color-mix(
-      in srgb,
-      var(--accent) calc(var(--prob, 0) * 80%),
-      var(--surface-2)
-    )
-  );
-  border-color: color-mix(
-    in srgb,
-    var(--danger) calc(var(--prob, 0) * 120%),
-    var(--surface-3)
-  );
+  /* Mix red→green across the normalized range, then blend with bg at low prob */
+  --hue: color-mix(in srgb, var(--heat-hi) calc(var(--prob, 0) * 100%), var(--heat-lo));
+  background: color-mix(in srgb, var(--hue) calc(20% + var(--prob, 0) * 80%), var(--surface-2));
+  border-color: color-mix(in srgb, var(--hue) calc(30% + var(--prob, 0) * 70%), var(--surface-3));
 }
 
 /* In assigning mode, unknown cells show a subtle teal tint to invite marking */
@@ -158,6 +150,8 @@ const tooltip = computed(() => {
 }
 
 .treasure-glyph {
+  font-family: var(--font-mono);
+  font-weight: 700;
   color: var(--treasure-color, var(--accent-2));
 }
 

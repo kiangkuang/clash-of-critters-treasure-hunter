@@ -17,6 +17,7 @@ export interface TreasureInstance {
   definitionId: string
   found: boolean
   color: string
+  label: string // A, B, C… assigned by position across all instances in the stage
 }
 
 export interface GridCell {

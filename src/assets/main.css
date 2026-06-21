@@ -12,6 +12,10 @@
   --danger: #e85d4a;
   --danger-dim: rgba(232, 93, 74, 0.15);
 
+  /* Heatmap palette — red (low prob) → green (high prob = dig here) */
+  --heat-lo: #c0392b;
+  --heat-hi: #27ae60;
+
   --font-mono: 'Share Tech Mono', 'Courier New', monospace;
   --font-body: 'Inter', system-ui, sans-serif;
 

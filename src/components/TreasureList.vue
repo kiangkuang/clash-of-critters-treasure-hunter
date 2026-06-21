@@ -14,16 +14,14 @@ const {
   resetGrid,
 } = useGameState()
 
-const flatTreasures = computed(() => {
-  const copyCounter: Record<string, number> = {}
-  return treasureInstances.value.map((instance) => {
-    copyCounter[instance.definitionId] = (copyCounter[instance.definitionId] ?? 0) + 1
+const flatTreasures = computed(() =>
+  treasureInstances.value.map((instance) => {
     const def = TREASURE_DEFINITIONS.find((d) => d.id === instance.definitionId)!
     const markedCount = markedCountForInstance(instance.id)
     const maxCells = maxCellsForInstance(instance.id)
-    return { instance, def, copyNum: copyCounter[instance.definitionId], markedCount, maxCells }
-  })
-})
+    return { instance, def, markedCount, maxCells }
+  }),
+)
 
 const foundCount = computed(() => treasureInstances.value.filter((t) => t.found).length)
 const totalCount = computed(() => treasureInstances.value.length)
@@ -49,7 +47,7 @@ const assigningItem = computed(() =>
 
     <div v-else class="items">
       <div
-        v-for="{ instance, def, copyNum, markedCount, maxCells } in flatTreasures"
+        v-for="{ instance, def, markedCount, maxCells } in flatTreasures"
         :key="instance.id"
         class="item"
         :class="{
@@ -60,6 +58,13 @@ const assigningItem = computed(() =>
         :style="{ '--t-color': instance.color }"
         @click="instance.found ? toggleTreasureFound(instance.id) : setAssigningInstance(instance.id)"
       >
+        <span class="item-label">{{ instance.label }}</span>
+
+        <div class="item-info">
+          <span class="item-name">{{ def.name }}</span>
+          <span class="item-sub">{{ def.rows }}×{{ def.cols }}</span>
+        </div>
+
         <button
           class="assign-btn"
           :class="{ active: assigningInstanceId === instance.id }"
@@ -73,14 +78,9 @@ const assigningItem = computed(() =>
           "
           @click.stop
         >
-          <template v-if="markedCount > 0">◆ {{ markedCount }}/{{ maxCells }}</template>
-          <template v-else>◇ mark</template>
+          <template v-if="assigningInstanceId === instance.id">marking</template>
+          <template v-else>{{ markedCount }}/{{ maxCells }}</template>
         </button>
-
-        <div class="item-info">
-          <span class="item-name">{{ def.name }}</span>
-          <span class="item-sub">Copy {{ copyNum }} · {{ def.rows }}×{{ def.cols }}</span>
-        </div>
       </div>
     </div>
 
@@ -214,6 +214,17 @@ const assigningItem = computed(() =>
   gap: 1px;
   flex: 1;
   min-width: 0;
+}
+
+.item-label {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--t-color);
+  flex-shrink: 0;
+  width: 22px;
+  text-align: center;
+  line-height: 1;
 }
 
 .item-name {

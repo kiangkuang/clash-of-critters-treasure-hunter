@@ -7,7 +7,9 @@ const {
   gridSize,
   cycleCell,
   cellProbability,
+  cellProbabilityNormalized,
   cellColor,
+  cellLabel,
   currentStage,
   probabilityLoading,
   probabilityExact,
@@ -42,7 +44,9 @@ const {
         :key="`${cell.row}-${cell.col}`"
         :cell="cell"
         :probability="cellProbability(cell.row, cell.col)"
+        :probabilityNormalized="cellProbabilityNormalized(cell.row, cell.col)"
         :treasureColor="cellColor(cell)"
+        :treasureLabel="cellLabel(cell)"
         :assigningInstanceId="assigningInstanceId"
         @click="cycleCell(cell.row, cell.col)"
       />
@@ -51,15 +55,15 @@ const {
     <div class="legend">
       <div class="legend-item">
         <span class="swatch swatch-cool"></span>
-        <span>Low</span>
+        <span>Low prob</span>
       </div>
       <div class="legend-item">
         <span class="swatch swatch-warm"></span>
-        <span>Moderate</span>
+        <span>Medium</span>
       </div>
       <div class="legend-item">
         <span class="swatch swatch-hot"></span>
-        <span>High</span>
+        <span>Dig here</span>
       </div>
       <div class="legend-item">
         <span class="swatch swatch-empty"></span>
@@ -190,9 +194,9 @@ const {
   flex-shrink: 0;
 }
 
-.swatch-cool { background: var(--surface-2); }
-.swatch-warm { background: color-mix(in srgb, var(--accent) 40%, var(--surface-2)); }
-.swatch-hot  { background: var(--danger); }
+.swatch-cool { background: color-mix(in srgb, var(--heat-lo) 60%, var(--surface-2)); }
+.swatch-warm { background: color-mix(in srgb, var(--heat-hi) 50%, var(--heat-lo)); }
+.swatch-hot  { background: var(--heat-hi); }
 .swatch-empty {
   background: var(--ground);
   border-style: dashed;
